@@ -1,0 +1,40 @@
+async def call_next(self, db: AsyncSession, operator_id: int) -> Optional[TicketResponse]:
+    operator = await db.get(Operator, operator_id)
+    if not operator or not operator.is_available:
+        raise ValueError("Оператор недоступен")
+
+    query = (
+        select(Ticket)
+        .join(ServiceType)
+        .where(
+            Ticket.office_id == operator.office_id,
+            Ticket.status == TicketStatus.WAITING,
+        )
+    )
+
+    if operator.specialization and operator.specialization != "general":
+        query = query.where(
+            (ServiceType.specialization == operator.specialization)
+            | (ServiceType.specialization == "general")
+        )
+
+    query = query.order_by(Ticket.priority.desc(), Ticket.created_at.asc())
+    ticket = (await db.execute(query)).scalars().first()
+    if not ticket:
+        return None
+
+    now = datetime.now(timezone.utc)
+    ticket.status = TicketStatus.SERVING
+    ticket.operator_id = operator_id
+    ticket.window_number = operator.window_number
+    ticket.serving_started_at = now
+
+    await self.publisher.publish("ticket.called", TicketCalledEvent(
+        ticket_id=ticket.id,
+        ticket_number=ticket.ticket_number,
+        window_number=operator.window_number or 0,
+        fcm_token=ticket.client.fcm_token if ticket.client else None,
+        # ...
+    ).model_dump())
+
+    return self._to_response(ticket)

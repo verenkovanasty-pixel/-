@@ -1,0 +1,55 @@
+async def create_ticket(
+    self,
+    db: AsyncSession,
+    service_type_id: int,
+    office_id: int,
+    client_id: Optional[int] = None,
+    appointment_id: Optional[int] = None,
+) -> TicketResponse:
+    office = await db.get(Office, office_id)
+    if not office or not await self._is_office_open(office):
+        raise ValueError("Офис недоступен")
+
+    service_type = await db.get(ServiceType, service_type_id)
+    if not service_type:
+        raise ValueError("Тип услуги не найден")
+
+    if not await self._has_available_operators(db, office_id, service_type.specialization):
+        raise ValueError("Нет доступных операторов")
+
+    client_category = "standard"
+    client_phone = None
+    if client_id:
+        client = await db.get(Client, client_id)
+        if client:
+            client_category = client.category
+            client_phone = client.phone
+
+    ticket_number = await self._generate_ticket_number(db, office)
+    priority = self.priority_calc.calculate(
+        client_category=client_category,
+        has_appointment=appointment_id is not None,
+    )
+    estimated_wait = await self._estimate_wait(db, office_id, service_type_id)
+
+    ticket = Ticket(
+        ticket_number=ticket_number,
+        office_id=office_id,
+        service_type_id=service_type_id,
+        client_id=client_id,
+        status=TicketStatus.WAITING,
+        priority=priority,
+        estimated_wait_minutes=estimated_wait,
+    )
+    db.add(ticket)
+    await db.flush()
+
+    await self.publisher.publish("ticket.created", TicketCreatedEvent(
+        ticket_id=ticket.id,
+        ticket_number=ticket.ticket_number,
+        client_phone=client_phone,
+        estimated_wait_minutes=estimated_wait,
+        # ...
+    ).model_dump())
+
+    return self._to_response(ticket)

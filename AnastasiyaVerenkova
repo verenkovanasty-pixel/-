@@ -1,0 +1,28 @@
+class PriorityCalculator:
+    def __init__(self, config_loader: ConfigLoader):
+        self.config = config_loader
+
+    def calculate(
+        self,
+        client_category: str = "standard",
+        has_appointment: bool = False,
+        created_at: Optional[datetime] = None,
+    ) -> int:
+        weights = self.config.get("priority_weights", {})
+        category_weights = weights.get("client_category", {})
+        appointment_weights = weights.get("appointment", {})
+        wait_weights = weights.get("wait_time", {})
+
+        priority = 0
+        priority += category_weights.get(client_category, category_weights.get("default", 0))
+        if has_appointment:
+            priority += appointment_weights.get("has_appointment", 80)
+
+        if created_at:
+            now = datetime.now(timezone.utc)
+            wait_minutes = (now - created_at).total_seconds() / 60
+            per_minute = wait_weights.get("per_minute", 1)
+            max_bonus = wait_weights.get("max_bonus", 30)
+            priority += min(int(wait_minutes * per_minute), max_bonus)
+
+        return priority

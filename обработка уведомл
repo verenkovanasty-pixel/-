@@ -1,0 +1,20 @@
+class NotificationHandler:
+    async def handle_ticket_created(self, data: dict):
+        phone = data.get("client_phone")
+        if not phone:
+            return
+        message = (
+            f"Ваш талон: {data['ticket_number']}. "
+            f"Примерное время ожидания: {data.get('estimated_wait_minutes', '?')} мин."
+        )
+        await self.sms.send(phone, message)
+
+    async def handle_ticket_called(self, data: dict):
+        fcm_token = data.get("fcm_token")
+        if not fcm_token:
+            return
+        await self.push.send(
+            fcm_token,
+            title="Вас вызывают!",
+            body=f"Талон {data['ticket_number']}. Подойдите к окну №{data.get('window_number', '?')}",
+        )

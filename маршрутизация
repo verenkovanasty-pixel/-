@@ -1,0 +1,15 @@
+ROUTES = {
+    "/api/v1/tickets": settings.queue_service_url,
+    "/api/v1/ws/operator": settings.queue_service_url,
+    "/api/v1/dashboard": settings.analytics_service_url,
+    "/api/v1/reports": settings.analytics_service_url,
+    "/api/v1/auth": settings.integration_service_url,
+    "/api/v1/devices": settings.monitoring_service_url,
+    "/api/v1/users": settings.user_service_url,
+}
+
+def resolve_service(path: str) -> str | None:
+    for prefix, url in ROUTES.items():
+        if path.startswith(prefix):
+            return url
+    return None

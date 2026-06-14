@@ -1,0 +1,25 @@
+export const callNext = createAsyncThunk('queue/callNext', async (operatorId: number) => {
+  return api.post<Ticket>('/tickets/call-next', { operator_id: operatorId })
+})
+
+export const completeTicket = createAsyncThunk(
+  'queue/complete',
+  async ({ ticketId, operatorId }: { ticketId: number; operatorId: number }) => {
+    return api.post<Ticket>(`/tickets/${ticketId}/complete`, { operator_id: operatorId })
+  }
+)
+
+const queueSlice = createSlice({
+  name: 'queue',
+  initialState,
+  extraReducers: (builder) => {
+    builder
+      .addCase(callNext.fulfilled, (state, action) => {
+        state.currentTicket = action.payload
+        state.waitingQueue = state.waitingQueue.filter((t) => t.id !== action.payload.id)
+      })
+      .addCase(completeTicket.fulfilled, (state) => {
+        state.currentTicket = null
+      })
+  },
+})
